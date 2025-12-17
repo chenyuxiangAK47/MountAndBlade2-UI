@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Module>
+	<Name value="QuickStartMod"/>
+	<Id value="QuickStartMod"/>
+	<Version value="v1.0.0"/>
+	<ModuleCategory value="Singleplayer"/>
+	<Official value="false"/>
+	<DependedModules>
+		<DependedModule Id="Native"/>
+		<DependedModule Id="SandBoxCore"/>
+		<DependedModule Id="Sandbox"/>
+		<DependedModule Id="CustomBattle"/>
+		<DependedModule Id="StoryMode"/>
+		<DependedModule Id="Bannerlord.Harmony"/>
+		<DependedModule Id="Bannerlord.UIExtenderEx"/>
+	</DependedModules>
+	<!-- SubModule 配置：加载 C# DLL -->
+	<SubModules>
+		<SubModule>
+			<Name value="QuickStartMod" />
+			<DLLName value="QuickStartMod.dll" />
+			<SubModuleClassType value="QuickStartMod.QuickStartSubModule" />
+			<Tags>
+				<Tag key="DedicatedServerType" value="none" />
+			</Tags>
+		</SubModule>
+	</SubModules>
+	<!-- 此 Mod 不需要 XML 配置 -->
+	<Xmls>
+	</Xmls>
+</Module>
+

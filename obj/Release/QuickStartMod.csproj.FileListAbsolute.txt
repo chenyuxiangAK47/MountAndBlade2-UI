@@ -1,0 +1,6 @@
+D:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\QuickStartMod\obj\Release\QuickStartMod.csproj.AssemblyReference.cache
+D:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\QuickStartMod\obj\Release\QuickStartMod.csproj.CoreCompileInputs.cache
+D:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\QuickStartMod\bin\Win64_Shipping_Client\QuickStartMod.dll
+D:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\QuickStartMod\bin\Win64_Shipping_Client\QuickStartMod.pdb
+D:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\QuickStartMod\obj\Release\QuickStartMod.dll
+D:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\QuickStartMod\obj\Release\QuickStartMod.pdb
