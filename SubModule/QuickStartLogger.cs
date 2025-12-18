@@ -37,7 +37,7 @@ namespace QuickStartMod
                             {
                                 Directory.CreateDirectory(logDir);
                             }
-                            _logFilePath = Path.Combine(logDir, $"QuickStartMod_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
+                            _logFilePath = Path.Combine(logDir, string.Format("QuickStartMod_{0:yyyy-MM-dd_HH-mm-ss}.log", DateTime.Now));
                             break;
                         }
                         catch
@@ -49,12 +49,12 @@ namespace QuickStartMod
                     // 如果所有路径都失败，使用临时文件
                     if (_logFilePath == null)
                     {
-                        _logFilePath = Path.Combine(Path.GetTempPath(), $"QuickStartMod_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
+                        _logFilePath = Path.Combine(Path.GetTempPath(), string.Format("QuickStartMod_{0:yyyy-MM-dd_HH-mm-ss}.log", DateTime.Now));
                     }
                 }
                 catch
                 {
-                    _logFilePath = Path.Combine(Path.GetTempPath(), $"QuickStartMod_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
+                    _logFilePath = Path.Combine(Path.GetTempPath(), string.Format("QuickStartMod_{0:yyyy-MM-dd_HH-mm-ss}.log", DateTime.Now));
                 }
             }
             return _logFilePath;
@@ -66,7 +66,7 @@ namespace QuickStartMod
         public static void Log(string message, bool showInGame = false)
         {
             var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
-            var logMessage = $"[{timestamp}] [QuickStartMod] {message}";
+            var logMessage = string.Format("[{0}] [QuickStartMod] {1}", timestamp, message);
 
             // 1. 写入文件
             try
@@ -90,7 +90,7 @@ namespace QuickStartMod
             {
                 try
                 {
-                    InformationManager.DisplayMessage(new InformationMessage($"[QuickStartMod] {message}", new Color(0.5f, 0.8f, 1.0f)));
+                    InformationManager.DisplayMessage(new InformationMessage("[QuickStartMod] " + message, new Color(0.5f, 0.8f, 1.0f)));
                 }
                 catch
                 {
@@ -104,7 +104,7 @@ namespace QuickStartMod
         /// </summary>
         public static void LogStep(int step, string description, bool showInGame = false)
         {
-            Log($"【步骤 {step}】{description}", showInGame);
+            Log("【步骤 " + step + "】" + description, showInGame);
         }
 
         /// <summary>
@@ -112,13 +112,13 @@ namespace QuickStartMod
         /// </summary>
         public static void LogError(string step, Exception ex, bool showInGame = true)
         {
-            var errorMessage = $"【错误 - {step}】{ex.GetType().Name}: {ex.Message}";
+            var errorMessage = string.Format("【错误 - {0}】{1}: {2}", step, ex.GetType().Name, ex.Message);
             Log(errorMessage, showInGame);
-            Log($"堆栈跟踪: {ex.StackTrace}", false);
+            Log("堆栈跟踪: " + ex.StackTrace, false);
             
             if (ex.InnerException != null)
             {
-                Log($"内部异常: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}", false);
+                Log(string.Format("内部异常: {0}: {1}", ex.InnerException.GetType().Name, ex.InnerException.Message), false);
             }
         }
 
@@ -127,7 +127,7 @@ namespace QuickStartMod
         /// </summary>
         public static void LogSuccess(string message, bool showInGame = false)
         {
-            Log($"✅ {message}", showInGame);
+            Log("✅ " + message, showInGame);
         }
 
         /// <summary>
@@ -135,7 +135,7 @@ namespace QuickStartMod
         /// </summary>
         public static void LogWarning(string message, bool showInGame = false)
         {
-            Log($"⚠️ {message}", showInGame);
+            Log("⚠️ " + message, showInGame);
         }
     }
 }

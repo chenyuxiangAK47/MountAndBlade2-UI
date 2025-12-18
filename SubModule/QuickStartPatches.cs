@@ -47,7 +47,7 @@ namespace QuickStartMod
                 var n = m.Name;
                 if (n.Contains("Refresh") && (n.Contains("Menu") || n.Contains("Option")))
                 {
-                    TaleWorlds.Library.Debug.Print($"[QuickStart] TargetMethods: 找到方法 {n}", 0, TaleWorlds.Library.Debug.DebugColor.Yellow);
+                    TaleWorlds.Library.Debug.Print("[QuickStart] TargetMethods: 找到方法 " + n, 0, TaleWorlds.Library.Debug.DebugColor.Yellow);
                     yield return m;
                 }
             }
@@ -57,13 +57,15 @@ namespace QuickStartMod
         {
             try
             {
-                TaleWorlds.Library.Debug.Print($"[QuickStart] Postfix hit: {__originalMethod?.Name}, MenuOptions.Count={__instance?.MenuOptions?.Count ?? 0}", 0, TaleWorlds.Library.Debug.DebugColor.Yellow);
+                var methodName = (__originalMethod != null) ? __originalMethod.Name : "null";
+                var count = (__instance != null && __instance.MenuOptions != null) ? __instance.MenuOptions.Count : 0;
+                TaleWorlds.Library.Debug.Print("[QuickStart] Postfix hit: " + methodName + ", MenuOptions.Count=" + count, 0, TaleWorlds.Library.Debug.DebugColor.Yellow);
                 EnsureQuickStart(__instance);
             }
             catch (Exception ex)
             {
-                TaleWorlds.Library.Debug.Print($"[QuickStart] Postfix error: {ex}", 0, TaleWorlds.Library.Debug.DebugColor.Red);
-                TaleWorlds.Library.Debug.Print($"[QuickStart] StackTrace: {ex.StackTrace}", 0, TaleWorlds.Library.Debug.DebugColor.Red);
+                TaleWorlds.Library.Debug.Print("[QuickStart] Postfix error: " + ex, 0, TaleWorlds.Library.Debug.DebugColor.Red);
+                TaleWorlds.Library.Debug.Print("[QuickStart] StackTrace: " + ex.StackTrace, 0, TaleWorlds.Library.Debug.DebugColor.Red);
             }
         }
 
@@ -107,40 +109,92 @@ namespace QuickStartMod
             Func<(bool, TextObject)> isDisabledAndReason = () => (false, new TextObject(""));
             Func<bool> isHidden = () => false;
 
-            // 点击动作
+            // 点击动作：不再直接反射 Game.StartNewGame(false)，而是复用原版“沙盒模式”菜单项的执行逻辑
             Action action = () =>
             {
                 try
                 {
-                    TaleWorlds.Library.Debug.Print("[QuickStart] ========== 按钮被点击！==========", 0, TaleWorlds.Library.Debug.DebugColor.Green);
+                    TaleWorlds.Library.Debug.Print("[QuickStart] ========== 按钮被点击！尝试复用沙盒菜单项 ==========", 0, TaleWorlds.Library.Debug.DebugColor.Green);
                     InformationManager.DisplayMessage(new InformationMessage(
                         "快速开始：正在启动新游戏...",
                         new TaleWorlds.Library.Color(0.2f, 0.8f, 0.2f)));
 
+                    // 标记为快速开始模式，后续通过 OnApplicationTick 延迟发金币
                     QuickStartHelper.IsQuickStartMode = true;
+                    QuickStartHelper.PendingGold = true;
+                    QuickStartHelper.GoldDone = false;
 
-                    // 启动新游戏（沙盒模式）
-                    var gameType = typeof(TaleWorlds.Core.Game);
-                    var currentProperty = gameType.GetProperty("Current");
-                    if (currentProperty != null)
+                    // 在当前菜单项中查找“沙盒模式”按钮
+                    InitialMenuOptionVM sandboxOption = null;
+                    foreach (var opt in vm.MenuOptions)
                     {
-                        var game = currentProperty.GetValue(null);
-                        if (game != null)
+                        try
                         {
-                            var startNewGameMethod = gameType.GetMethod("StartNewGame", new[] { typeof(bool) });
-                            if (startNewGameMethod != null)
+                            var text = opt?.NameText?.ToString() ?? string.Empty;
+                            if (string.IsNullOrEmpty(text))
+                                continue;
+
+                            // 兼容中英文关键字
+                            if (text.Contains("沙盒") || text.Contains("Sandbox"))
                             {
-                                startNewGameMethod.Invoke(game, new object[] { false }); // false = 沙盒模式
-                                TaleWorlds.Library.Debug.Print("[QuickStart] StartNewGame 调用成功", 0, TaleWorlds.Library.Debug.DebugColor.Green);
+                                sandboxOption = opt;
+                                break;
                             }
                         }
+                        catch
+                        {
+                            // 忽略单个菜单项异常，继续找
+                        }
+                    }
+
+                    if (sandboxOption != null)
+                    {
+                        TaleWorlds.Library.Debug.Print("[QuickStart] 找到原版沙盒菜单项，调用其 ExecuteAction()", 0, TaleWorlds.Library.Debug.DebugColor.Green);
+
+                        try
+                        {
+                            // 为了避免签名变动导致编译错误，这里用反射调用 ExecuteAction
+                            var method = typeof(InitialMenuOptionVM).GetMethod(
+                                "ExecuteAction",
+                                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+                            if (method != null)
+                            {
+                                method.Invoke(sandboxOption, null);
+                            }
+                            else
+                            {
+                                TaleWorlds.Library.Debug.Print("[QuickStart] InitialMenuOptionVM.ExecuteAction 未找到，放弃启动以避免未知状态", 0, TaleWorlds.Library.Debug.DebugColor.Red);
+                                InformationManager.DisplayMessage(new InformationMessage(
+                                    "快速开始：未找到沙盒按钮执行方法，已安全中止。",
+                                    new TaleWorlds.Library.Color(0.8f, 0.2f, 0.2f)));
+                            }
+                        }
+                        catch (Exception exInvoke)
+                        {
+                            TaleWorlds.Library.Debug.Print("[QuickStart] 复用沙盒 ExecuteAction 失败: " + exInvoke, 0, TaleWorlds.Library.Debug.DebugColor.Red);
+                            InformationManager.DisplayMessage(new InformationMessage(
+                                "快速开始：沙盒按钮执行失败 - " + exInvoke.Message,
+                                new TaleWorlds.Library.Color(0.8f, 0.2f, 0.2f)));
+                        }
+                    }
+                    else
+                    {
+                        TaleWorlds.Library.Debug.Print("[QuickStart] 未找到沙盒菜单项，为避免走非官方路径，取消启动。", 0, TaleWorlds.Library.Debug.DebugColor.Red);
+                        InformationManager.DisplayMessage(new InformationMessage(
+                            "快速开始：未找到原版沙盒菜单项，已取消启动以避免潜在崩溃。",
+                            new TaleWorlds.Library.Color(0.8f, 0.2f, 0.2f)));
+
+                        // 找不到沙盒按钮时，不应继续保持“待发放金币”状态，直接清理标志
+                        QuickStartHelper.IsQuickStartMode = false;
+                        QuickStartHelper.PendingGold = false;
                     }
                 }
                 catch (Exception ex)
                 {
-                    TaleWorlds.Library.Debug.Print($"[QuickStart] 快速开始执行失败: {ex}", 0, TaleWorlds.Library.Debug.DebugColor.Red);
+                    TaleWorlds.Library.Debug.Print("[QuickStart] 快速开始执行失败: " + ex, 0, TaleWorlds.Library.Debug.DebugColor.Red);
                     InformationManager.DisplayMessage(new InformationMessage(
-                        $"快速开始：执行失败 - {ex.Message}",
+                        "快速开始：执行失败 - " + ex.Message,
                         new TaleWorlds.Library.Color(0.8f, 0.2f, 0.2f)));
                 }
             };
@@ -165,7 +219,7 @@ namespace QuickStartMod
             // ⭐有些版本 UI 不会立刻刷新，强制通知一次
             NotifyMenuOptionsChanged(vm);
 
-            TaleWorlds.Library.Debug.Print($"[QuickStart] EnsureQuickStart: 注入完成。现在 MenuOptions.Count={vm.MenuOptions.Count}", 0, TaleWorlds.Library.Debug.DebugColor.Green);
+            TaleWorlds.Library.Debug.Print("[QuickStart] EnsureQuickStart: 注入完成。现在 MenuOptions.Count=" + vm.MenuOptions.Count, 0, TaleWorlds.Library.Debug.DebugColor.Green);
         }
 
         private static void NotifyMenuOptionsChanged(InitialMenuVM vm)
@@ -188,7 +242,7 @@ namespace QuickStartMod
             }
             catch (Exception ex)
             {
-                TaleWorlds.Library.Debug.Print($"[QuickStart] NotifyMenuOptionsChanged 失败: {ex.Message}", 0, TaleWorlds.Library.Debug.DebugColor.Yellow);
+                TaleWorlds.Library.Debug.Print("[QuickStart] NotifyMenuOptionsChanged 失败: " + ex.Message, 0, TaleWorlds.Library.Debug.DebugColor.Yellow);
             }
         }
     }

@@ -150,3 +150,9 @@ namespace QuickStartMod
 - **UIExtension**：`D:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\QuickStartMod\SubModule\QuickStartUIExtension.cs`
 - **最新日志**：`D:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\logs\rgl_log_12340.txt`
 
+
+
+
+
+
+

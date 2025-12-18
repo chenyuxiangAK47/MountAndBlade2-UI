@@ -63,3 +63,9 @@ public class QuickStartViewModelMixin : BaseViewModelMixin<ViewModel>
 - **InitialMenuVM 完整类型名**：`TaleWorlds.MountAndBlade.ViewModelCollection.InitialMenu.InitialMenuVM`
 - **RefreshValues 方法**：已确认存在
 
+
+
+
+
+
+
