@@ -50,10 +50,7 @@
       <HintPath>..\..\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.ViewModelCollection.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="TaleWorlds.MountAndBlade.GauntletUI">
-      <HintPath>..\..\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.GauntletUI.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
+    <!-- GauntletUI 引用已删除：代码中未使用，且该 DLL 在某些版本中可能不存在 -->
     <Reference Include="TaleWorlds.Localization">
       <HintPath>..\..\bin\Win64_Shipping_Client\TaleWorlds.Localization.dll</HintPath>
       <Private>False</Private>
@@ -77,6 +74,7 @@
     <Compile Include="SubModule\QuickStartUIExtension.cs" />
     <Compile Include="SubModule\QuickStartViewModelMixin.cs" />
     <Compile Include="SubModule\QuickStartPatches.cs" />
+    <Compile Include="SubModule\QuickStartCharCreationSkipper.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

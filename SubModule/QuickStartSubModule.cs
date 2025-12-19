@@ -10,12 +10,16 @@ using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.GameState;
 using TaleWorlds.Library;
 using TaleWorlds.CampaignSystem.Actions;
+using TaleWorlds.MountAndBlade.ViewModelCollection.InitialMenu;
 
 namespace QuickStartMod
 {
     // 独立的 QuickStart Mod - 主菜单快速开始按钮
     public class QuickStartSubModule : MBSubModuleBase
     {
+        // ✅ 按照 ChatGPT 要求：每次编译手动改 BUILD_ID，确保运行的是最新 DLL
+        private const string QS_BUILD_ID = "2025-12-19-2100";
+        
         private static Harmony _harmony = null;
         // 暂时移除 UIExtender 的强类型引用，改用 object 或反射
         private object _uiExtender = null;
@@ -73,6 +77,31 @@ namespace QuickStartMod
             
             try
             {
+                // ✅ 按照 ChatGPT 要求：必须在一进来就打 BUILD_ID + DLL 指纹，确保运行的是最新 DLL
+                var thisAssembly = typeof(QuickStartSubModule).Assembly;
+                var location = thisAssembly.Location;
+                var version = thisAssembly.GetName().Version?.ToString() ?? "null";
+                var fileTime = System.IO.File.Exists(location) 
+                    ? System.IO.File.GetLastWriteTime(location).ToString("yyyy-MM-dd HH:mm:ss")
+                    : "no_file";
+                
+                TaleWorlds.Library.Debug.Print(
+                    $"[QuickStart] ========== BUILD={QS_BUILD_ID} ==========",
+                    0,
+                    TaleWorlds.Library.Debug.DebugColor.Yellow);
+                TaleWorlds.Library.Debug.Print(
+                    $"[QuickStart] Ver={version}, DllTime={fileTime}",
+                    0,
+                    TaleWorlds.Library.Debug.DebugColor.Yellow);
+                TaleWorlds.Library.Debug.Print(
+                    $"[QuickStart] Path={location}",
+                    0,
+                    TaleWorlds.Library.Debug.DebugColor.Yellow);
+                TaleWorlds.Library.Debug.Print(
+                    "[QuickStart] =====================================",
+                    0,
+                    TaleWorlds.Library.Debug.DebugColor.Yellow);
+                
                 base.OnSubModuleLoad();
                 TaleWorlds.Library.Debug.Print("[QuickStart] base.OnSubModuleLoad() 执行完成", 0, TaleWorlds.Library.Debug.DebugColor.Green);
                 
@@ -336,8 +365,28 @@ namespace QuickStartMod
                                TaleWorlds.Library.Debug.Print("[QuickStart] UIExtender.Register 成功（ViewModelMixin 已禁用，只注册 PrefabExtension）", 0, TaleWorlds.Library.Debug.DebugColor.Green);
                            }
                     
-                           // 调用 Enable（指定无参数，避免 AmbiguousMatchException）
-                           var enableMethod = uiExtenderType.GetMethod("Enable", Type.EmptyTypes);
+                           // 调用 Enable（尝试多个重载，避免 AmbiguousMatchException）
+                           // 根据 ChatGPT 建议：如果不需要 UIExtenderEx 的 API，可以跳过 Enable
+                           // 但为了兼容性，我们尝试调用 Enable
+                           MethodInfo enableMethod = null;
+                           
+                           // 尝试无参数版本
+                           try
+                           {
+                               enableMethod = uiExtenderType.GetMethod("Enable", Type.EmptyTypes);
+                           }
+                           catch (AmbiguousMatchException)
+                           {
+                               // 如果有多个重载，尝试获取所有 Enable 方法，选择无参数的
+                               var methods = uiExtenderType.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                                   .Where(m => m.Name == "Enable" && m.GetParameters().Length == 0)
+                                   .ToArray();
+                               if (methods.Length > 0)
+                               {
+                                   enableMethod = methods[0];
+                               }
+                           }
+                           
                            if (enableMethod != null)
                            {
                                enableMethod.Invoke(_uiExtender, null);
@@ -345,7 +394,8 @@ namespace QuickStartMod
                            }
                            else
                            {
-                               TaleWorlds.Library.Debug.Print("[QuickStart] 找不到 UIExtender.Enable 方法！", 0, TaleWorlds.Library.Debug.DebugColor.Red);
+                               // Enable 失败不影响功能（按钮通过 Harmony 注入）
+                               TaleWorlds.Library.Debug.Print("[QuickStart] UIExtender.Enable 未找到或调用失败（不影响功能）", 0, TaleWorlds.Library.Debug.DebugColor.Yellow);
                            }
                 }
                 catch (System.Exception ex)
@@ -354,15 +404,86 @@ namespace QuickStartMod
                     TaleWorlds.Library.Debug.Print("[QuickStart] StackTrace: " + ex.StackTrace, 0, TaleWorlds.Library.Debug.DebugColor.Red);
                 }
                 
-                // ✅ 使用 PatchAll 让 Harmony 自动调用 TargetMethods() 来 Patch 多个方法
+                // ✅ 恢复到最简单的版本：使用 PatchAll + TargetMethods（这是之前能工作的版本）
                 try
                 {
                     if (_harmony == null)
                     {
                         _harmony = new Harmony("QuickStartMod");
                     }
+                    
+                    TaleWorlds.Library.Debug.Print("[QuickStart] 开始应用 Harmony PatchAll（按钮注入）...", 0, TaleWorlds.Library.Debug.DebugColor.Yellow);
+                    
+                    // 1) PatchAll 用于按钮注入（使用 TargetMethods）
                     _harmony.PatchAll(typeof(QuickStartMod.QuickStartMenuInjectPatch).Assembly);
-                    TaleWorlds.Library.Debug.Print("[QuickStart] Harmony PatchAll 成功（使用 TargetMethods 自动 Patch）", 0, TaleWorlds.Library.Debug.DebugColor.Green);
+                    
+                    // ✅ 按照 ChatGPT 要求：验证 Patch 是否成功，打印每个被 patch 的方法的 PatchInfo
+                    try
+                    {
+                        var targetType = typeof(InitialMenuVM);
+                        var ctors = AccessTools.GetDeclaredConstructors(targetType);
+                        var refreshValues = AccessTools.DeclaredMethod(targetType, "RefreshValues");
+                        
+                        int totalPatched = 0;
+                        foreach (var ctor in ctors)
+                        {
+                            if (ctor != null)
+                            {
+                                var patchInfo = Harmony.GetPatchInfo(ctor);
+                                var postfixCount = patchInfo?.Postfixes?.Count ?? 0;
+                                TaleWorlds.Library.Debug.Print(
+                                    $"[QuickStart] PATCH_VERIFY: {ctor.ToString()} | Postfix count={postfixCount}",
+                                    0,
+                                    postfixCount > 0 ? TaleWorlds.Library.Debug.DebugColor.Green : TaleWorlds.Library.Debug.DebugColor.Red);
+                                if (postfixCount > 0) totalPatched++;
+                            }
+                        }
+                        
+                        if (refreshValues != null)
+                        {
+                            var patchInfo = Harmony.GetPatchInfo(refreshValues);
+                            var postfixCount = patchInfo?.Postfixes?.Count ?? 0;
+                            TaleWorlds.Library.Debug.Print(
+                                $"[QuickStart] PATCH_VERIFY: {refreshValues.ToString()} | Postfix count={postfixCount}",
+                                0,
+                                postfixCount > 0 ? TaleWorlds.Library.Debug.DebugColor.Green : TaleWorlds.Library.Debug.DebugColor.Red);
+                            if (postfixCount > 0) totalPatched++;
+                        }
+                        
+                        TaleWorlds.Library.Debug.Print(
+                            $"[QuickStart] PATCH_OK: 总共成功 patch {totalPatched} 个方法",
+                            0,
+                            totalPatched > 0 ? TaleWorlds.Library.Debug.DebugColor.Green : TaleWorlds.Library.Debug.DebugColor.Red);
+                    }
+                    catch (Exception verifyEx)
+                    {
+                        TaleWorlds.Library.Debug.Print("[QuickStart] PATCH_VERIFY 失败: " + verifyEx.Message, 0, TaleWorlds.Library.Debug.DebugColor.Yellow);
+                    }
+                    
+                    TaleWorlds.Library.Debug.Print("[QuickStart] Harmony PatchAll 完成（按钮注入）", 0, TaleWorlds.Library.Debug.DebugColor.Green);
+                    
+                    // 2) 手动 patch StartNarrativeStage（因为它在 CampaignSystem 中，可能加载较晚）
+                    try
+                    {
+                        var managerType = Type.GetType("TaleWorlds.CampaignSystem.CharacterCreationContent.CharacterCreationManager, TaleWorlds.CampaignSystem");
+                        if (managerType != null)
+                        {
+                            var startNarrativeMethod = AccessTools.Method(managerType, "StartNarrativeStage");
+                            if (startNarrativeMethod != null)
+                            {
+                                var patchMethod = AccessTools.Method(typeof(QuickStartCharacterCreationManagerPatch), "Postfix");
+                                if (patchMethod != null)
+                                {
+                                    _harmony.Patch(startNarrativeMethod, postfix: new HarmonyMethod(patchMethod));
+                                    TaleWorlds.Library.Debug.Print("[QuickStart] Patched: CharacterCreationManager.StartNarrativeStage", 0, TaleWorlds.Library.Debug.DebugColor.Green);
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        TaleWorlds.Library.Debug.Print("[QuickStart] Failed to patch StartNarrativeStage: " + ex.Message, 0, TaleWorlds.Library.Debug.DebugColor.Red);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -404,7 +525,15 @@ namespace QuickStartMod
         {
             base.OnApplicationTick(dt);
 
-            // 只有在快速开始模式且存在待发放金币时才继续
+            // A) 角色创建“自动驾驶”：只在快速开始模式启用时工作
+            if (QuickStartHelper.IsQuickStartMode &&
+                QuickStartHelper.AutoSkipCharCreation &&
+                !QuickStartHelper.CharCreationDone)
+            {
+                QuickStartCharCreationSkipper.Tick(dt);
+            }
+
+            // 1) 只有在快速开始模式且存在待发放金币时才继续金币逻辑
             if (!QuickStartHelper.IsQuickStartMode)
                 return;
 
@@ -421,22 +550,84 @@ namespace QuickStartMod
             if (!string.Equals(state.GetType().Name, "MapState", StringComparison.Ordinal))
                 return;
 
-            // 进入 MapState 后再缓冲一小段时间，避免刚切入地图瞬间就动经济系统
+            // 进入 MapState 后再缓冲更长时间，确保所有对象都已初始化
             _goldWaitTime += dt;
-            if (_goldWaitTime < 0.5f)
+            if (_goldWaitTime < 2.0f) // 从 0.5 秒增加到 2.0 秒，确保游戏完全初始化
+            {
+                // 在等待期间，每 0.5 秒检查一次对象是否可用
+                if (_goldWaitTime > 0.5f && (int)(_goldWaitTime * 2) != (int)((_goldWaitTime - dt) * 2))
+                {
+                    Debug.Print(
+                        "[QuickStart] Waiting for game initialization... (" + _goldWaitTime.ToString("F1") + "s)",
+                        0,
+                        Debug.DebugColor.Yellow);
+                }
                 return;
+            }
 
             try
             {
                 // 反射拿到 Hero.MainHero
                 var heroType = Type.GetType("TaleWorlds.CampaignSystem.Hero, TaleWorlds.CampaignSystem");
-                var mainHeroProp = heroType != null
-                    ? heroType.GetProperty("MainHero", BindingFlags.Public | BindingFlags.Static)
-                    : null;
-                var heroObj = mainHeroProp != null ? mainHeroProp.GetValue(null, null) : null;
-
-                if (heroType == null || heroObj == null)
+                if (heroType == null)
+                {
+                    Debug.Print(
+                        "[QuickStart] Gold grant: Hero type not found, will retry",
+                        0,
+                        Debug.DebugColor.Yellow);
+                    _goldWaitTime = 1.5f; // 重置等待时间，稍后重试
                     return;
+                }
+
+                var mainHeroProp = heroType.GetProperty("MainHero", BindingFlags.Public | BindingFlags.Static);
+                if (mainHeroProp == null)
+                {
+                    Debug.Print(
+                        "[QuickStart] Gold grant: MainHero property not found, will retry",
+                        0,
+                        Debug.DebugColor.Yellow);
+                    _goldWaitTime = 1.5f;
+                    return;
+                }
+
+                var heroObj = mainHeroProp.GetValue(null, null);
+                if (heroObj == null)
+                {
+                    Debug.Print(
+                        "[QuickStart] Gold grant: MainHero is null, will retry",
+                        0,
+                        Debug.DebugColor.Yellow);
+                    _goldWaitTime = 1.5f;
+                    return;
+                }
+
+                // 额外检查：尝试访问 Hero 的某个属性，确保对象真的可用
+                try
+                {
+                    var nameProp = heroType.GetProperty("Name", BindingFlags.Public | BindingFlags.Instance);
+                    if (nameProp != null)
+                    {
+                        var name = nameProp.GetValue(heroObj, null);
+                        if (name == null)
+                        {
+                            Debug.Print(
+                                "[QuickStart] Gold grant: Hero.Name is null, object may not be fully initialized, will retry",
+                                0,
+                                Debug.DebugColor.Yellow);
+                            _goldWaitTime = 1.5f;
+                            return;
+                        }
+                    }
+                }
+                catch (Exception checkEx)
+                {
+                    Debug.Print(
+                        "[QuickStart] Gold grant: Hero object validation failed: " + checkEx.Message + ", will retry",
+                        0,
+                        Debug.DebugColor.Yellow);
+                    _goldWaitTime = 1.5f;
+                    return;
+                }
 
                 // 反射调用 ChangeHeroGold(int)
                 var changeGold = heroType.GetMethod(
@@ -447,8 +638,17 @@ namespace QuickStartMod
                     null);
 
                 if (changeGold == null)
+                {
+                    Debug.Print(
+                        "[QuickStart] Gold grant: ChangeHeroGold method not found",
+                        0,
+                        Debug.DebugColor.Red);
+                    QuickStartHelper.GoldDone = true; // 标记为完成，避免无限重试
+                    QuickStartHelper.PendingGold = false;
                     return;
+                }
 
+                // 调用方法
                 changeGold.Invoke(heroObj, new object[] { QuickStartHelper.QuickStartGold });
 
                 Debug.Print(
@@ -461,9 +661,29 @@ namespace QuickStartMod
             catch (Exception ex)
             {
                 Debug.Print(
-                    "[QuickStart] Gold grant FAILED on MapState: " + ex,
+                    "[QuickStart] Gold grant FAILED on MapState: " + ex.Message,
                     0,
                     Debug.DebugColor.Red);
+                Debug.Print(
+                    "[QuickStart] StackTrace: " + ex.StackTrace,
+                    0,
+                    Debug.DebugColor.Red);
+                
+                // 如果是访问违规或空引用，标记为完成，避免反复尝试导致崩溃
+                if (ex is NullReferenceException || ex is System.Reflection.TargetInvocationException)
+                {
+                    Debug.Print(
+                        "[QuickStart] Gold grant: Critical error detected, marking as done to prevent crash",
+                        0,
+                        Debug.DebugColor.Red);
+                    QuickStartHelper.GoldDone = true;
+                }
+                else
+                {
+                    // 其他错误，重置等待时间，稍后重试
+                    _goldWaitTime = 1.5f;
+                    return;
+                }
             }
             finally
             {
